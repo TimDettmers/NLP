@@ -15,14 +15,16 @@ class ParsingWorker(Thread):
     def run(self):
         while True:
             split_name, idx, batch = self.queue.get()
-            X = np.zeros((len(batch),),dtype=np.int32)
-            Y = np.zeros((len(batch),),dtype=np.int32)
-            for i, char in enumerate(batch):
+            X = np.zeros((len(batch)-1,),dtype=np.int32)
+            Y = np.zeros((self.tp.batch_size,),dtype=np.int32)
+            for i, char in enumerate(batch[:-1]):
                 if char not in self.vocab:
                     X[i] = 0
                     continue
                 X[i] = self.vocab[char]
-            Y[:-1] = X[1:]
+            X = X.reshape(self.tp.batch_size, self.tp.sequence_length)
+            Y[:-1] = X[1:, 0]
+            Y[-1] = self.vocab[batch[-1]]
 
             self.tp.batches[split_name][idx] = (X,Y)
 
@@ -42,7 +44,8 @@ class TextParser(Thread):
         self.active_split = 'train'
         self.do_seek = True
         self.batches = {'train' : {}, 'cv' : {}, 'test' : {}}
-        self.max_idx = {'train' : {}, 'cv' : {}, 'test' : {}}
+        self.max_idx = {'train' : 99999999999, 'cv' : 9999999999, 'test' : 9999999999}
+        self.epoch = 1
 
 
     def get_split_idx(self):
@@ -106,9 +109,6 @@ class TextParser(Thread):
         batchX, batchY = self.batches[self.active_split].pop(self.current_idx, None)
         self.current_idx+=1
 
-        batchX = batchX.reshape(self.batch_size, self.sequence_length)
-        batchY = batchY.reshape(self.batch_size, self.sequence_length)
-
         return { pX : batchX, pY : batchY }
 
 
@@ -125,19 +125,24 @@ class TextParser(Thread):
                 for line in f:
                     lines.append(line)
                     length += len(line)
-                    if length >= needed_size:
+                    if length >= needed_size+1:
                         while (len(self.batches) > self.max_queue_length
                                 or self.q.qsize() > self.max_queue_length):
                             time.sleep(0.1)
                         s = "".join(lines).lower()
                         if self.do_seek: break
 
-                        self.q.put((self.active_split, idx, s[:needed_size]))
+                        self.q.put((self.active_split, idx, s[:needed_size+1]))
                         idx+=1
                         del lines[:]
                         lines.append(s[needed_size:])
                         length = len(lines[0])
-                if not self.do_seek: self.max_idx[self.active_split] = idx-1
+                if not self.do_seek:
+                    self.max_idx[self.active_split] = idx-1
+                    if self.active_split == 'train':
+                        print 'EPOCH: {0}'.format(self.epoch)
+                        self.epoch+=1
+
 
 
 
