@@ -36,7 +36,7 @@ class ParsingWorker(Thread):
 class TextParser(Thread):
     def __init__(self, path, splits=[0.8,0.1,0.1]):
         Thread.__init__(self)
-        self.vocab = self.get_character_set(path)
+        self.vocab, self.idx2vocab = self.get_character_set(path)
         self.path = path
         assert np.sum(splits) == 1
         self.splits = np.cumsum(splits)
@@ -70,17 +70,19 @@ class TextParser(Thread):
 
     def get_character_set(self, path, char_limit=100000):
         vocab = {}
+        idx2vocab = {}
         idx = 1
         char_count = 0
         with open(path) as f:
             for line in f:
                 for char in line.lower():
                     char_count+=1
-                    if char_count > char_limit: return vocab
+                    if char_count > char_limit: return (vocab, idx2vocab)
                     if char not in vocab:
                         vocab[char] = idx
+                        idx2vocab[idx] = char
                         idx+=1
-        return vocab
+        return (vocab, idx2vocab)
 
     def prepare_batches(self, batch_size, sequence_length, workers=4, max_queue_length = 20):
         self.q = Queue.Queue()
@@ -110,6 +112,18 @@ class TextParser(Thread):
         self.current_idx+=1
 
         return { pX : batchX, pY : batchY }
+
+    def get_sequence_from_text(self, text):
+        text = text.lower()
+        X = np.zeros((len(text),))
+        for i, char in enumerate(text):
+            if char not in self.vocab:
+                X[i] = 0
+                continue
+            X[i] = self.vocab[char]
+
+        return X
+
 
 
     def run(self):

@@ -37,7 +37,6 @@ class Model(object):
         correct = tf.nn.in_top_k(logits, pY, 1)
         return tf.reduce_sum(tf.cast(correct, tf.int32))
 
-
-
-
-
+    def generate(self, logits):
+        char = tf.argmax(logits,1)
+        return char
