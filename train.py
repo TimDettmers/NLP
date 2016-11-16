@@ -8,6 +8,8 @@ class Trainer(object):
         self.tp = text_parser
         self.embedding_size = embedding_size
         self.lr = 0.001
+        self.cv_interval = 1000
+        self.L2 = 0.00005
 
     def init_placeholders(self):
         self.pX = tf.placeholder(tf.int32, shape=(self.tp.batch_size, self.tp.sequence_length))
@@ -16,7 +18,7 @@ class Trainer(object):
 
     def init_model(self):
        self.model = model.Model(self.embedding_size, self.tp)
-       self.logits = self.model.prediction(self.pX)
+       self.logits= self.model.prediction(self.pX)
        self.mean_loss = self.model.loss(self.logits, self.pY)
        self.opt_step = self.model.optimize(self.mean_loss, self.lr)
        self.evaluate = self.model.evaluation(self.logits, self.pY)
@@ -43,9 +45,12 @@ class Trainer(object):
                 self.sess.run(init)
                 for i in range(batch_count):
                     feed_dict = self.tp.get_next_feed_dict(self.pX,self.pY)
+                    #print feed_dict[self.pY]
+                    #print self.sess.run(self.generate_train, feed_dict)
+                    #print self.logits
                     loss_value, _ = self.sess.run([self.mean_loss, self.opt_step], feed_dict)
 
-                    if i % 1000 == 0 and i > 0:
+                    if i % self.cv_interval == 0 and i > 0:
                         print 'Batch number: {0}'.format(i)
                         error_train = self.get_errors('train')
                         error_cv = self.get_errors('cv')
@@ -64,12 +69,9 @@ class Trainer(object):
 
         for i in range(sequence_length):
             feed_dict= { self.pGenX : X}
-            next_char = self.sess.run(self.generate, feed_dict)[0]
-            print next_char
-            print X
+            next_char = self.sess.run(self.generate, feed_dict)[-1]
             X[0,:-1] = X[0,1:]
             X[0, -1] = next_char
-            print X
             if next_char != 0:
                 seed_text += self.tp.idx2vocab[next_char]
 
