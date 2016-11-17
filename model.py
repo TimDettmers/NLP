@@ -68,8 +68,7 @@ class Model(object):
         correct = tf.nn.in_top_k(logits, pY, 1)
         return tf.reduce_sum(tf.cast(correct, tf.int32))
 
-    def generate(self, logits):
-        char = tf.argmax(logits,1)
-        print logits
-        print char
-        return char
+    def generate(self, logits, k=5):
+        softmax = tf.nn.softmax(logits)
+        kmax, idx = tf.nn.top_k(softmax,k)
+        return [idx, kmax]
