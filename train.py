@@ -19,15 +19,16 @@ class Trainer(object):
 
     def init_model(self):
        self.model = model.Model(self.embedding_size, self.tp)
-       self.logits= self.model.prediction(self.pX)
+       self.logits= self.model.prediction(self.pX, self.tp.batch_size)
        self.mean_loss = self.model.loss(self.logits, self.pY)
        self.opt_step = self.model.optimize(self.mean_loss, self.lr)
        self.evaluate = self.model.evaluation(self.logits, self.pY)
-       self.logitsGen = self.model.prediction(self.pGenX)
-       self.generate = self.model.generate(self.logitsGen, 1)
+       self.generate = self.model.generate(self.logits, 1)
 
-       self.logitsGenBeam = self.model.prediction(self.pGenXBeam)
-       self.generate_beam = self.model.generate(self.logitsGenBeam, 2)
+       self.logitsGen = self.model.prediction(self.pGenX, 1)
+
+       #self.logitsGenBeam = self.model.prediction(self.pGenXBeam)
+       #self.generate_beam = self.model.generate(self.logitsGenBeam, 2)
 
 
     def get_errors(self, split_name):
@@ -65,14 +66,14 @@ class Trainer(object):
 
     def generate_text(self, seed_text, kmax=2, levels=4, sequence_length=150):
         sequence = self.tp.get_sequence_from_text(seed_text)
-        X = np.zeros((1,self.tp.sequence_length))
+        X = np.zeros((self.tp.batch_size,self.tp.sequence_length))
         if sequence.shape[0] > self.tp.sequence_length:
             X[0, :] = sequence[-self.tp.sequence_length]
         else:
             X[0, -sequence.shape[0]:] = sequence
 
         for i in range(sequence_length):
-            feed_dict= { self.pGenX : X}
+            feed_dict= { self.pX : X}
             next_char, softmax = self.sess.run(self.generate, feed_dict)
             next_char = next_char[0][0]
             X[0,:-1] = X[0,1:]

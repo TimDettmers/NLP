@@ -1,5 +1,6 @@
 import tensorflow as tf
 import numpy as np
+from tensorflow.python.ops import rnn_cell, rnn
 
 
 class Model(object):
@@ -7,7 +8,7 @@ class Model(object):
         self.embedding_size = embedding_size
         self.tp = text_parser
 
-    def prediction(self, pX):
+    def prediction(self, pX, batch_size):
         embeddings = tf.Variable(tf.random_uniform((len(self.tp.vocab),self.embedding_size), -1.0,1.0))
         filters=8
         k1 = tf.Variable(tf.truncated_normal((11,11,1,filters), stddev = 0.1))
@@ -32,18 +33,32 @@ class Model(object):
 
         #logits = tf.matmul(y1Reshaped, self.h2) + b2
 
+
         self.h1 = tf.Variable(tf.truncated_normal((self.embedding_size*self.tp.sequence_length, 1024)))
         b1 = tf.Variable(tf.zeros(1024))
 
-        self.h2 = tf.Variable(tf.truncated_normal((1024, len(self.tp.vocab))))
+        #self.h2 = tf.Variable(tf.truncated_normal((1024, len(self.tp.vocab))))
+        #b2 = tf.Variable(tf.zeros(len(self.tp.vocab)))
+        # 1 hidden layer MLP
+        #X = tf.reshape(X, [-1,self.embedding_size*self.tp.sequence_length])
+        #a1 = tf.matmul(X, self.h1) + b1
+        #y1 = tf.nn.relu(a1)
+        #logits = tf.matmul(y1,self.h2) + b2
+
+        #lstm
+        cell_count = 128
+        lstm = rnn_cell.BasicLSTMCell(cell_count)
+        lstm.zero_state(batch_size, tf.float32)
+        self.h2 = tf.Variable(tf.truncated_normal((cell_count, len(self.tp.vocab))))
         b2 = tf.Variable(tf.zeros(len(self.tp.vocab)))
 
         X = tf.nn.embedding_lookup(embeddings, pX)
-        X = tf.reshape(X, [-1,self.embedding_size*self.tp.sequence_length])
-        a1 = tf.matmul(X, self.h1) + b1
-        y1 = tf.nn.relu(a1)
-        logits = tf.matmul(y1,self.h2) + b2
+        shape = X.get_shape().as_list()
+        seq = tf.reshape(X,[-1,shape[1]*shape[2]])
+        seq = tf.split(1,shape[1],seq)
+        lstm_out, state = rnn.rnn(lstm, seq, dtype=tf.float32)
 
+        logits = tf.matmul(lstm_out[-1],self.h2) + b2
         #return [logits, regularizers]
         return logits
 
